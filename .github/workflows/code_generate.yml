@@ -1,0 +1,51 @@
+name: Code Generate
+on:
+  repository_dispatch:
+    types:
+      - gen-proto
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Extract version
+        id: extract
+        run: echo ::set-output name=version::$(echo $(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") | sed -e 's/.*v\(.*\)/\1/')
+
+      - name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          java-version: "11"
+          distribution: "adopt-openj9"
+
+      - name: Update proto submodule
+        run: make update-submodules
+
+      - name: Publish Java Snapshot package
+        run: make publish
+        env:
+          VERSION: ${{ steps.extract.outputs.version }}-SNAPSHOT
+          USERNAME: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Java package
+        run: make publish
+        continue-on-error: true
+        if: false
+        env:
+          VERSION: ${{ steps.extract.outputs.version}}
+
+      - name: Commit and push code
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: Update auto generated code"
+          git push
+
